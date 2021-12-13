@@ -1,0 +1,79 @@
+version: "3.9"
+services:
+   web-app:
+       build:
+           context: ./docker
+           dockerfile: www.Dockerfile
+       container_name: ${APP_NAME:?err}-www
+       volumes:
+           - './src/www:/var/www/html'
+       depends_on:
+           - db
+           - backend
+       links:
+           - db
+           - backend
+       networks:
+           - default
+
+   web-server:
+       image: nginx:latest
+       container_name: ${APP_NAME:?err}-nginx
+       ports:
+           - '80:80'
+           - '443:443'
+       links:
+           - 'web-app'
+       volumes:
+           - './src/www:/var/www/html'
+           - './config/nginx:/etc/nginx/conf.d'
+       networks:
+           - default
+
+   backend:
+       build: ./src/node
+       container_name: ${APP_NAME:?err}-node
+       depends_on:
+           - db
+       ports:
+           - "3900:3900"
+       volumes:
+           - ./src/node/backend:/opt/app
+           - /opt/app/node_modules
+       links:
+           - db
+
+   ftpd_server:
+       image: stilliard/pure-ftpd:hardened
+       container_name: ${APP_NAME:?err}-pure-ftpd
+       ports:
+           - "21:21"
+           - "30000-30009:30000-30009"
+       volumes:
+           - "./src/ftpd/data:/home/yunwisdom"
+           - "./src/ftpd/passwd:/etc/pure-ftpd/passwd"
+       environment:
+           PUBLICHOST: "localhost"
+           FTP_USER_NAME: yunwisdom
+           FTP_USER_PASS: mypass
+           FTP_USER_HOME: /home/yunwisdom
+       restart: always
+
+   db: 
+       image: mysql:8.0
+       container_name: ${APP_NAME:?err}-mysql
+       ports:
+           - "3306:3306"
+       command: --default-authentication-plugin=mysql_native_password
+       environment:
+           MYSQL_DATABASE: firmas
+           MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?err} 
+       volumes:
+           - ./src/mysql/dump:/docker-entrypoint-initdb.d
+           - ./src/mysql:/etc/mysql/conf.d
+           - persistent:/var/lib/mysql
+       networks:
+           - default
+
+volumes:
+   persistent:
